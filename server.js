@@ -33,8 +33,17 @@ const corsOptions = {
 
 // Enable CORS early so it applies to static file responses as well
 app.use(cors(corsOptions));
-// Serve uploads with CORS applied (also works if static is hit directly)
-app.use('/uploads', cors(corsOptions), express.static(UPLOAD_DIR));
+// Serve uploads with a permissive CORS header to avoid origin-specific cache issues at the CDN/edge.
+// This sets Access-Control-Allow-Origin: * for static files and removes credentials so it is safe with CDNs.
+app.use('/uploads', (req, res, next) => {
+  // Only set permissive CORS for safe methods
+  if (req.method === 'GET' || req.method === 'HEAD') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    // Remove credentials header if global CORS set it earlier
+    try { res.removeHeader('Access-Control-Allow-Credentials'); } catch (e) {}
+  }
+  next();
+}, express.static(UPLOAD_DIR));
 // Explicitly respond to preflight requests
 app.options('*', cors(corsOptions));
 
@@ -97,6 +106,23 @@ app.use('/api/categories/products', productCategories);
 app.use('/api/categories/services', serviceCategories);
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
+
+// Temporary debug endpoint to list files in uploads (for debugging on Koyeb). Remove after verification.
+app.get('/api/debug/uploads', (req, res) => {
+  try {
+    const files = fs.readdirSync(UPLOAD_DIR).map(name => {
+      try {
+        const stat = fs.statSync(require('path').join(UPLOAD_DIR, name));
+        return { name, size: stat.size, mtime: stat.mtime };
+      } catch (e) {
+        return { name, error: String(e) };
+      }
+    });
+    res.json({ ok: true, count: files.length, files });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
