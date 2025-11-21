@@ -19,7 +19,6 @@ const app = express();
 // ensure uploads dir
 const UPLOAD_DIR = 'uploads';
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR);
-app.use('/uploads', express.static(UPLOAD_DIR));
 // Enable CORS with explicit options for clearer behavior in dev
 const corsOptions = {
   origin: (origin, callback) => {
@@ -32,7 +31,10 @@ const corsOptions = {
   preflightContinue: false,
 };
 
+// Enable CORS early so it applies to static file responses as well
 app.use(cors(corsOptions));
+// Serve uploads with CORS applied (also works if static is hit directly)
+app.use('/uploads', cors(corsOptions), express.static(UPLOAD_DIR));
 // Explicitly respond to preflight requests
 app.options('*', cors(corsOptions));
 
